@@ -4,14 +4,15 @@ using namespace std;
 
 int main()
 {
-    int i, j;
-    for(i=1; i<5; i++)
+    int star, space;
+
+    for(int enter=1; enter<5; enter++)
     {
-        for(j=0; j<5-i; j++)
+        for(space=1; space<5-enter; space++)
         {
             cout << " ";
         }
-        for(j=0; j<i*2-1; j++)
+        for(star=1; star<enter*2; star++)
         {
             cout << "*";
         }
