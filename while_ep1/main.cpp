@@ -55,10 +55,72 @@ int main()
     }
     cout << endl;
 
-    cout << "question6 : " << "\t";
-    for(int a = 0; a < Count_num; a++)
-    {
-        data[a] = 1;
 
+    cout << "question6 : " << "\t";
+
+    for(init_num = 1; init_num <= Count_num; init_num++)
+    {
+        if(init_num%2 == 1)
+            cout << setw(2) << init_num << " ";
+        else
+            cout << setw(2) << -init_num << " ";
     }
+    cout << endl;
+    cout << "question7 : " << "\t";
+    cout << "-------------------------------------------------------------";
+    for(init_num=1; init_num<=Count_num; init_num++)
+    {
+        if((init_num-1)%10 == 0)
+        {
+            cout << endl;
+            cout << "\t\t";
+        }
+
+        if(init_num%2 == 1)
+            cout << setw(4) << init_num << "  ";
+        else
+            cout << setw(4) << -init_num << "  ";
+    }
+    cout << endl;
+
+    cout << "question8 : " << "\t";
+    init_num=1;
+    while(init_num<=Count_num)
+    {
+        if((init_num-1)%10==0)
+        {
+            cout << endl;
+            cout << "\t\t";
+        }
+        if(init_num%2==1)
+        {
+            cout << setw(4) << init_num << "  ";
+        }
+        else
+        {
+            cout << setw(4) << -init_num << "  ";
+        }
+        init_num++;
+    }
+    cout << endl;
+
+    cout << "question9 : " << "\t";
+    for(init_num=1; init_num<=Count_num; init_num++)
+    {
+        if(init_num%2==1)
+            cout << setw(4) << init_num << "  ";
+    }
+    cout << endl;
+
+    cout << "question10 : " << "\t";
+    init_num=1;
+    while(init_num<=Count_num)
+    {
+        if(init_num%2==1)
+        {
+            cout << setw(4) << init_num << "  ";
+        }
+        init_num++;
+    }
+    cout << endl;
 }
