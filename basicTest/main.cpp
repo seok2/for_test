@@ -190,7 +190,7 @@ int main()
             else if((int)ch == answer)
             {
                 cout << "Victory!!" << tries << "time you corret" << endl;
-                cout << "input 1 or 0";
+                cout << "input 1 or 0 : ";
                 cin >> var;
                 if(var==1)
                 {
@@ -199,7 +199,7 @@ int main()
                 }
                 else if(var==0)
                 {
-                    cout << "bye";
+                    cout << "bye" << endl;
                 break;
                 }
 
