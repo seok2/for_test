@@ -1,12 +1,60 @@
+#include <sys/time.h>
+#include <netinet/in.h>
+#include <net/ethernet.h>
+#include <pcap/pcap.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pcap.h>     //libpcap 헤더 포험
+#include <string.h>
 #include <errno.h>
-#include <sys/socket.h>
+#include <unistd.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
 
-#include <arpa/inet.h>
 
+struct ip *iph;
+struct tcphdr *tcph;
+
+void callback(u_char *useless, const struct pcap_pkthdr *pkthdr,
+                const u_char *packet)
+{
+    static int count = 1;
+    struct ether_header *ep;
+    unsigned short ether_type;
+    int chcnt =0;
+    int length=pkthdr->len;
+
+    // 이더넷 헤더를 가져온다.
+    ep = (struct ether_header *)packet;
+
+    // IP 헤더를 가져오기 위해서
+    // 이더넷 헤더 크기만큼 offset 한다.
+    packet += sizeof(struct ether_header);
+
+    // 프로토콜 타입을 알아낸다.
+    ether_type = ntohs(ep->ether_type);
+
+    // 만약 IP 패킷이라면
+    if (ether_type == ETHERTYPE_IP)
+    {
+        // IP 헤더에서 데이타 정보를 출력한다.
+        iph = (struct ip *)packet;
+        printf("IP 패킷\n");
+        printf("Version     : %d\n", iph->ip_v);
+        printf("Header Len  : %d\n", iph->ip_hl);
+        printf("Ident       : %d\n", ntohs(iph->ip_id));
+        printf("TTL         : %d\n", iph->ip_ttl);
+        printf("Src Address : %s\n", inet_ntoa(iph->ip_src));
+        printf("Dst Address : %s\n", inet_ntoa(iph->ip_dst));
+
+
+    printf("\n\n");
+    }
+}
 int main(int argc, char **argv)
 {
     char *dev;    // 네트워크 디바이스
@@ -17,7 +65,9 @@ int main(int argc, char **argv)
     bpf_u_int32 netp;  // 네트워크 디바이스의 네트워크 주소가 저장될 주소
     bpf_u_int32 maskp; // 네트워크 디바이스의 넷마스크 주소가 저장될 주소
     struct in_addr addr;
-
+    struct in_addr net_addr, mask_addr;
+    const u_char *packet;
+    pcap_t *pcd;
 
 
     // pcap_t *pcap_open_live(char *device, int snaplen, int promisc, int to_ms, char *ebuf)
@@ -37,7 +87,9 @@ int main(int argc, char **argv)
     // 패킷의 pcap_pkthdr 구조체를 가리 키도록 설정되고
     // pkt_data 인수가 가리키는 포인터는 패킷의 데이터를 가리 키도록 설정
 
-    dev = pcap_lookupdev(errbuf); // 패킷을 캡쳐할 적당한 네트워크 디바이스 이름을 얻어온다
+
+
+    dev = argv[2]; // 패킷을 캡쳐할 적당한 네트워크 디바이스 이름을 얻어온다
 
 
     // 에러가 발생했을경우
@@ -48,7 +100,7 @@ int main(int argc, char **argv)
     }
 
     // 네트워크 디바이스 이름 출력
-    printf("DEV: %s\n",dev);
+    printf("DEV: %s\n", dev);
 
     //네트워크 디바이스의 네트워크 주소와 netmask 정보를 가져오기 위해 사용
     // mask, ip 정보 얻어오기
@@ -84,5 +136,16 @@ int main(int argc, char **argv)
         exit(1);
     }
     printf("MASK: %s\n",mask);
-    return 0;
+    printf("=======================\n");
+
+    pcd = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
+        if (pcd == NULL)
+        {
+            printf("%s\n", errbuf);
+            exit(1);
+        }
+
+
+
+    pcap_loop(pcd, atoi(argv[1]), callback, NULL);
 }
