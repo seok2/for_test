@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <iostream>
 #include <signal.h>
 #include <stdlib.h>
 #include <pcap.h>
@@ -10,7 +11,8 @@
 #include <net/if.h>
 #include <netinet/if_ether.h>
 #include <arpa/inet.h>
-
+#include <string.h>
+using namespace std;
     // pcap_t *pcap_open_live(char *device, int snaplen, int promisc, int to_ms, char *ebuf)
     // 현재 네트워크에서 사용하는 네트워크 디바이스의 패킷을 캡처하는 함수
     // 1번째는 오픈한 네트워크 어뎁터에 대한 장치드라이버에 대한 이름
@@ -28,6 +30,17 @@
     // 패킷의 pcap_pkthdr 구조체를 가리 키도록 설정되고
     // pkt_data 인수가 가리키는 포인터는 패킷의 데이터를 가리 키도록 설정
 
+struct arp_hdr {
+    uint16_t hardware_type; // 2
+    uint16_t protocol_type;
+    uint8_t hardwar_size; // 1
+    uint8_t protocol_size;
+    uint16_t opcode;
+    uint8_t sender_mac_address[6]; // 6
+    uint8_t sender_ip_address[4];
+    uint8_t target_mac_address[6];
+    uint8_t target_ip_address[4];
+}; //28
 int main(int argc, char **argv)
 {
     char *dev;    // 네트워크 디바이스
@@ -43,6 +56,36 @@ int main(int argc, char **argv)
     const u_char *pkt_data;
     pcap_t *pcd;
     int res;
+    u_int8_t j[42];
+    struct arp_hdr a;
+
+    a.hardware_type = 1;
+    a.protocol_type = 0x0800;
+    a.hardwar_size = 0x06;
+    a.protocol_size = 0x04;
+    a.opcode = 0x0002;
+    a.sender_mac_address[0] = 0x00;
+    a.sender_mac_address[1] = 0x0C;
+    a.sender_mac_address[2] = 0x29;
+    a.sender_mac_address[3] = 0x12;
+    a.sender_mac_address[4] = 0x6a;
+    a.sender_mac_address[5] = 0xcc;
+    a.sender_ip_address[0] = 0xc0;
+    a.sender_ip_address[1] = 0xa8;
+    a.sender_ip_address[2] = 0xb3;
+    a.sender_ip_address[3] = 0x89;
+    a.target_mac_address[0] = 0x00;
+    a.target_mac_address[1] = 0x50;
+    a.target_mac_address[2] = 0x56;
+    a.target_mac_address[3] = 0xfe;
+    a.target_mac_address[4] = 0xb8;
+    a.target_mac_address[5] = 0x00;
+    a.target_ip_address[0] = 0xc0;
+    a.target_ip_address[1] = 0xa8;
+    a.target_ip_address[2] = 0xb3;
+    a.target_ip_address[3] = 0x02;
+
+
 
     dev = argv[2];
 
@@ -106,38 +149,55 @@ int main(int argc, char **argv)
        exit(1);
     }*/
 
-    struct ip *iph;
-    struct tcphdr *tcph;
+
 
     struct ether_header *ep;
-    unsigned short ether_type;
+    struct ip *iph;
+    struct tcphdr *tcph;
+    int length=0;
+    memcpy(j, (u_int8_t*)ep, 14);
+    length = length + 14;
+    memcpy(j+length, (u_int16_t*)&a, 28);
 
     while((res = pcap_next_ex(pcd, &pkt_hdr, &pkt_data))>=0)
     {
         if(res==0) continue;
 
-    ep = (struct ether_header *)pkt_data;
+        ep = (struct ether_header *)pkt_data;
+        //pkt_data = pkt_data + sizeof(struct ether_header); // 크기
 
-    // IP 헤더를 가져오기 위해서
-    // 이더넷 헤더 크기만큼 offset 한다.
-    pkt_data += sizeof(struct ether_header);
+        switch(ntohs(ep->ether_type))
+        {
+            case ETHERTYPE_IP:
+            {
+                pkt_data = pkt_data + sizeof(struct ether_header); // 크기
+                // DST + SRC + EtherType (0x080 = ip)
+                // IP 헤더에서 데이타 정보를 출력한다.
+                iph = (struct ip *)pkt_data;
+                printf("Version     : %d\n", iph->ip_v);
+                printf("Header Len  : %d\n", iph->ip_hl);
+                printf("TTL         : %d\n", iph->ip_ttl);
+                printf("SRC IP      : %s\n", inet_ntoa(iph->ip_src));
+                printf("DST IP      : %s\n", inet_ntoa(iph->ip_dst));
 
-    // 프로토콜 타입을 알아낸다.
-    ether_type = ntohs(ep->ether_type);
+                    switch (iph->ip_p)
+                    {
+                        case IPPROTO_TCP:
+                        tcph = (struct tcphdr *)(pkt_data + iph->ip_hl * 4);
+                        printf("Src Port : %d\n" , ntohs(tcph->th_sport));
+                        printf("Dst Port : %d\n" , ntohs(tcph->th_dport));
+                        printf("\n");
+                    }
+                    break;
+            }
+            break;
+            if (pcap_sendpacket(pcd, (const u_char*)j, 42) != 0)
+            {
+                fprintf(stderr,"\nError sending the packet: \n", pcap_geterr(pcd));
+                exit(0);
+            }
+        }
 
-    // 만약 IP 패킷이라면
-    if (ether_type == ETHERTYPE_IP)  // DST + SRC + EtherType (0x080 = ip)
-    {
-        // IP 헤더에서 데이타 정보를 출력한다.
-        iph = (struct ip *)pkt_data;
-        printf("IP 패킷\n");
-        printf("Version     : %d\n", iph->ip_v);
-        printf("Header Len  : %d\n", iph->ip_hl);
-        printf("TTL         : %d\n", iph->ip_ttl); // TTL = IP 패킷이 라우터를 지나칠 때마다 라우터 TTL값 -1
-        printf("SRC IP      : %s\n", inet_ntoa(iph->ip_src));
-        printf("DST IP      : %s\n", inet_ntoa(iph->ip_dst));
-        printf("\n");
-    }
     // -1 == 에러가 발생했을 때
     if (res == -1)
     {
