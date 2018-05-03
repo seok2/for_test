@@ -59,12 +59,12 @@ int main(int argc, char **argv)
     u_int8_t j[42];
     struct arp_hdr a;
 
-    a.hardware_type = 1;
-    a.protocol_type = 0x0800;
+    a.hardware_type = htons(1); //3
+    a.protocol_type = htons(0x0806);
     a.hardwar_size = 0x06;
     a.protocol_size = 0x04;
-    a.opcode = 0x0002;
-    a.sender_mac_address[0] = 0x00;
+    a.opcode = htons(0x0002);
+    a.sender_mac_address[0] = 0x00; // 2
     a.sender_mac_address[1] = 0x0C;
     a.sender_mac_address[2] = 0x29;
     a.sender_mac_address[3] = 0x12;
@@ -74,7 +74,7 @@ int main(int argc, char **argv)
     a.sender_ip_address[1] = 0xa8;
     a.sender_ip_address[2] = 0xb3;
     a.sender_ip_address[3] = 0x89;
-    a.target_mac_address[0] = 0x00;
+    a.target_mac_address[0] = 0x00; // 1
     a.target_mac_address[1] = 0x50;
     a.target_mac_address[2] = 0x56;
     a.target_mac_address[3] = 0xfe;
@@ -142,29 +142,29 @@ int main(int argc, char **argv)
         exit(0);
     }
 
-/*        ret1 = pcap_next_ex(pcd, &pkt_hdr, &pkt_data);
-    if (ret1 == NULL)
-    {
-       printf("No packet found.\n");
-       exit(1);
-    }*/
-
-
-
     struct ether_header *ep;
     struct ip *iph;
     struct tcphdr *tcph;
     int length=0;
-    memcpy(j, (u_int8_t*)ep, 14);
-    length = length + 14;
-    memcpy(j+length, (u_int16_t*)&a, 28);
 
-    while((res = pcap_next_ex(pcd, &pkt_hdr, &pkt_data))>=0)
+    //while((res = pcap_next_ex(pcd, &pkt_hdr, &pkt_data))>=0)
     {
-        if(res==0) continue;
-
+        //if(res==0) continue;
+        res = pcap_next_ex(pcd, &pkt_hdr, &pkt_data);
         ep = (struct ether_header *)pkt_data;
-        //pkt_data = pkt_data + sizeof(struct ether_header); // 크기
+        memcpy(j, (u_int8_t*)ep, 14);
+        length = length + 14;
+        memcpy(j+length, (u_int8_t*)&a, 28);
+
+        for(int x = 0; x < 42; x++)
+        {
+            if(x%16==0)
+            {
+                printf("\n");
+            }
+            printf("%02x ", j[x]);
+        }
+        printf("\n");
 
         switch(ntohs(ep->ether_type))
         {
@@ -191,18 +191,16 @@ int main(int argc, char **argv)
                     break;
             }
             break;
-            if (pcap_sendpacket(pcd, (const u_char*)j, 42) != 0)
-            {
-                fprintf(stderr,"\nError sending the packet: \n", pcap_geterr(pcd));
-                exit(0);
-            }
+
+            pcap_sendpacket(pcd, (const u_char*)&j, 42);
+
         }
 
     // -1 == 에러가 발생했을 때
     if (res == -1)
     {
        printf("Error : %s\n",errbuf);
-       break;
+       exit(0);
     }
   }
 }
